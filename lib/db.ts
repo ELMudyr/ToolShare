@@ -75,10 +75,10 @@ export async function initializeDb() {
     args: ["Simona Daukšaitė", "simona.d@toolshare.lt", hash, "5B"],
   });
 
-  const u1 = r1.lastInsertRowid;
-  const u2 = r2.lastInsertRowid;
-  const u3 = r3.lastInsertRowid;
-  const u5 = r5.lastInsertRowid;
+  const u1 = Number(r1.lastInsertRowid);
+  const u2 = Number(r2.lastInsertRowid);
+  const u3 = Number(r3.lastInsertRowid);
+  const u5 = Number(r5.lastInsertRowid);
 
   await db.execute({
     sql: "INSERT INTO items (owner_id, name, description, status, image_url) VALUES (?, ?, ?, ?, ?)",
@@ -108,6 +108,6 @@ export async function initializeDb() {
 
   await db.execute({
     sql: "INSERT INTO lending_transactions (item_id, borrower_id, due_date, status) VALUES (?, ?, ?, 'active')",
-    args: [sanderResult.lastInsertRowid, u2, "2026-06-15"],
+    args: [Number(sanderResult.lastInsertRowid), u2, "2026-06-15"],
   });
 }

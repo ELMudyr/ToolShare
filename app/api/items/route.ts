@@ -4,7 +4,7 @@ import { getSession } from "@/lib/session";
 import type { Item } from "@/types";
 
 export async function GET() {
-  const session = getSession();
+  const session = await getSession();
   if (!session) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
@@ -30,7 +30,7 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const session = getSession();
+  const session = await getSession();
   if (!session) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
     FROM items i
     JOIN users u ON u.id = i.owner_id
     WHERE i.id = ?`,
-    args: [result.lastInsertRowid],
+    args: [Number(result.lastInsertRowid)],
   });
 
   return NextResponse.json(rows[0] as unknown as Item, { status: 201 });

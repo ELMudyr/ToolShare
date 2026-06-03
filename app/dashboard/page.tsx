@@ -6,7 +6,7 @@ import { DashboardShell } from "@/components/DashboardShell";
 import type { Item, ActiveBorrow } from "@/types";
 
 export default async function DashboardPage() {
-  const session = getSession();
+  const session = await getSession();
   if (!session) redirect("/");
 
   const { rows: itemRows } = await db.execute(

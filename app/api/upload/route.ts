@@ -7,7 +7,7 @@ const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
 const MAX_BYTES = 5 * 1024 * 1024; // 5 MB
 
 export async function POST(req: NextRequest) {
-  const session = getSession();
+  const session = await getSession();
   if (!session) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }

@@ -7,7 +7,7 @@ interface Params {
 }
 
 export async function PATCH(req: NextRequest, { params }: Params) {
-  const session = getSession();
+  const session = await getSession();
   if (!session)
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 

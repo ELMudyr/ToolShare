@@ -1,8 +1,8 @@
 import { cookies } from "next/headers";
 import type { SessionUser } from "@/types";
 
-export function getSession(): SessionUser | null {
-  const raw = cookies().get("toolshare_session")?.value;
+export async function getSession(): Promise<SessionUser | null> {
+  const raw = (await cookies()).get("toolshare_session")?.value;
   if (!raw) return null;
   try {
     return JSON.parse(
