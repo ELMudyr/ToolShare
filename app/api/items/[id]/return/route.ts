@@ -10,14 +10,15 @@ interface ItemRow {
 
 export async function PATCH(
   _req: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   const session = getSession();
   if (!session) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  const itemId = parseInt(params.id, 10);
+  const { id } = await params;
+  const itemId = parseInt(id, 10);
   if (isNaN(itemId)) {
     return NextResponse.json({ error: "Invalid item id" }, { status: 400 });
   }

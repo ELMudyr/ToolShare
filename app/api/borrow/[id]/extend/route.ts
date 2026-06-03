@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { getSession } from "@/lib/session";
 
 interface Params {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }
 
 export async function PATCH(req: NextRequest, { params }: Params) {
@@ -11,7 +11,8 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   if (!session)
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
-  const txId = parseInt(params.id, 10);
+  const { id } = await params;
+  const txId = parseInt(id, 10);
   if (isNaN(txId))
     return NextResponse.json({ error: "Invalid ID" }, { status: 400 });
 

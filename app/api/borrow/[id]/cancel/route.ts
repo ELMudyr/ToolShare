@@ -4,14 +4,15 @@ import { getSession } from "@/lib/session";
 
 export async function PATCH(
   _req: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   const session = getSession();
   if (!session) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  const txId = Number(params.id);
+  const { id } = await params;
+  const txId = Number(id);
   if (!Number.isInteger(txId) || txId <= 0) {
     return NextResponse.json(
       { error: "Invalid transaction id" },
