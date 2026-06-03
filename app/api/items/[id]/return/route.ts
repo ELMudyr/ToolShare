@@ -22,15 +22,17 @@ export async function PATCH(
     return NextResponse.json({ error: "Invalid item id" }, { status: 400 });
   }
 
-  const item = db
-    .prepare("SELECT id, owner_id, status FROM items WHERE id = ?")
-    .get(itemId) as ItemRow | undefined;
+  const { rows } = await db.execute({
+    sql: "SELECT id, owner_id, status FROM items WHERE id = ?",
+    args: [itemId],
+  });
+  const item = rows[0] as unknown as ItemRow | undefined;
 
   if (!item) {
     return NextResponse.json({ error: "Item not found" }, { status: 404 });
   }
 
-  if (item.owner_id !== session.id) {
+  if (Number(item.owner_id) !== session.id) {
     return NextResponse.json(
       { error: "You do not own this item" },
       { status: 403 },
@@ -44,16 +46,13 @@ export async function PATCH(
     );
   }
 
-  const markReturned = db.transaction(() => {
-    db.prepare("UPDATE items SET status = 'available' WHERE id = ?").run(
-      itemId,
-    );
-    db.prepare(
-      "UPDATE lending_transactions SET status = 'returned', returned_at = CURRENT_TIMESTAMP WHERE item_id = ? AND status = 'active'",
-    ).run(itemId);
-  });
-
-  markReturned();
+  await db.batch([
+    { sql: "UPDATE items SET status = 'available' WHERE id = ?", args: [itemId] },
+    {
+      sql: "UPDATE lending_transactions SET status = 'returned', returned_at = CURRENT_TIMESTAMP WHERE item_id = ? AND status = 'active'",
+      args: [itemId],
+    },
+  ], "write");
 
   return NextResponse.json({ message: "Item marked as returned" });
 }

@@ -9,6 +9,7 @@ interface UserRow {
   email: string;
   password_hash: string;
   apartment_number: string;
+  avatar_url: string | null;
 }
 
 export async function POST(req: NextRequest) {
@@ -22,11 +23,13 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const user = db.prepare("SELECT * FROM users WHERE email = ?").get(email) as
-    | UserRow
-    | undefined;
+  const { rows } = await db.execute({
+    sql: "SELECT * FROM users WHERE email = ?",
+    args: [email],
+  });
+  const user = rows[0] as unknown as UserRow | undefined;
 
-  if (!user || !bcrypt.compareSync(password, user.password_hash)) {
+  if (!user || !bcrypt.compareSync(password, String(user.password_hash))) {
     return NextResponse.json(
       { error: "Invalid email or password" },
       { status: 401 },
@@ -34,15 +37,16 @@ export async function POST(req: NextRequest) {
   }
 
   const session: SessionUser = {
-    id: user.id,
-    full_name: user.full_name,
-    email: user.email,
-    apartment_number: user.apartment_number,
+    id: Number(user.id),
+    full_name: String(user.full_name),
+    email: String(user.email),
+    apartment_number: String(user.apartment_number),
+    avatar_url: user.avatar_url as string | null ?? null,
   };
 
   const encoded = Buffer.from(JSON.stringify(session)).toString("base64");
 
-  const res = NextResponse.json({ id: user.id, full_name: user.full_name });
+  const res = NextResponse.json({ id: Number(user.id), full_name: String(user.full_name) });
   res.cookies.set("toolshare_session", encoded, {
     httpOnly: true,
     sameSite: "lax",

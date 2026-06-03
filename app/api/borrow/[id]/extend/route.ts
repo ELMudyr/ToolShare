@@ -30,11 +30,11 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     return NextResponse.json({ error: "Invalid date format" }, { status: 400 });
   }
 
-  const tx = db
-    .prepare(
-      "SELECT * FROM lending_transactions WHERE id = ? AND borrower_id = ? AND status = 'active'",
-    )
-    .get(txId, session.id) as
+  const { rows } = await db.execute({
+    sql: "SELECT * FROM lending_transactions WHERE id = ? AND borrower_id = ? AND status = 'active'",
+    args: [txId, session.id],
+  });
+  const tx = rows[0] as unknown as
     | { id: number; due_date: string; item_id: number }
     | undefined;
 
@@ -45,7 +45,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     );
 
   // New date must be after current due date
-  if (new_due_date <= tx.due_date) {
+  if (new_due_date <= String(tx.due_date)) {
     return NextResponse.json(
       { error: "New due date must be after the current due date" },
       { status: 409 },
@@ -62,25 +62,24 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     );
   }
 
-  // Check no conflicting borrow starts after current due_date for this item
-  const conflict = db
-    .prepare(
-      `SELECT id FROM lending_transactions
-       WHERE item_id = ? AND status = 'active' AND id != ? AND start_date > ?`,
-    )
-    .get(tx.item_id, txId, tx.due_date);
+  // Check for conflicting borrows after current due date
+  const { rows: conflicts } = await db.execute({
+    sql: `SELECT id FROM lending_transactions
+       WHERE item_id = ? AND status = 'active' AND id != ? AND due_date > ?`,
+    args: [Number(tx.item_id), txId, tx.due_date],
+  });
 
-  if (conflict) {
+  if (conflicts.length > 0) {
     return NextResponse.json(
       { error: "Item is already booked after your current due date" },
       { status: 409 },
     );
   }
 
-  db.prepare("UPDATE lending_transactions SET due_date = ? WHERE id = ?").run(
-    new_due_date,
-    txId,
-  );
+  await db.execute({
+    sql: "UPDATE lending_transactions SET due_date = ? WHERE id = ?",
+    args: [new_due_date, txId],
+  });
 
   return NextResponse.json({ due_date: new_due_date });
 }

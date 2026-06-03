@@ -2,14 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getSession } from "@/lib/session";
 
-interface BorrowResult {
-  httpStatus: number;
-  error?: string;
-  transaction_id?: number;
-  item_id?: number;
-  due_date?: string;
-}
-
 export async function POST(req: NextRequest) {
   const session = getSession();
   if (!session) {
@@ -26,52 +18,39 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // The transaction prevents a TOCTOU race where two simultaneous requests
+  // The batch prevents a TOCTOU race where two simultaneous requests
   // both read "available" before either write completes.
-  const attempt = db.transaction((): BorrowResult => {
-    const item = db
-      .prepare("SELECT id, status FROM items WHERE id = ?")
-      .get(item_id) as { id: number; status: string } | undefined;
+  try {
+    const { rows } = await db.execute({
+      sql: "SELECT id, status FROM items WHERE id = ?",
+      args: [item_id],
+    });
+    const item = rows[0] as unknown as { id: number; status: string } | undefined;
 
     if (!item) {
-      return { httpStatus: 404, error: "Item not found" };
+      return NextResponse.json({ error: "Item not found" }, { status: 404 });
     }
-
     if (item.status !== "available") {
-      return { httpStatus: 409, error: "This item is already checked out" };
+      return NextResponse.json({ error: "This item is already checked out" }, { status: 409 });
     }
 
-    db.prepare("UPDATE items SET status = 'borrowed' WHERE id = ?").run(
-      item_id,
-    );
+    // Atomic update + insert
+    await db.batch([
+      {
+        sql: "UPDATE items SET status = 'borrowed' WHERE id = ? AND status = 'available'",
+        args: [item_id],
+      },
+      {
+        sql: "INSERT INTO lending_transactions (item_id, borrower_id, due_date, notes) VALUES (?, ?, ?, ?)",
+        args: [item_id, session.id, due_date, notes ?? null],
+      },
+    ], "write");
 
-    const row = db
-      .prepare(
-        "INSERT INTO lending_transactions (item_id, borrower_id, due_date, notes) VALUES (?, ?, ?, ?)",
-      )
-      .run(item_id, session.id, due_date, notes ?? null);
+    const { rows: txRows } = await db.execute("SELECT last_insert_rowid() AS id");
+    const transaction_id = Number(txRows[0].id);
 
-    return {
-      httpStatus: 201,
-      transaction_id: Number(row.lastInsertRowid),
-      item_id,
-      due_date,
-    };
-  });
-
-  try {
-    const result = attempt();
-    if (result.error) {
-      return NextResponse.json(
-        { error: result.error },
-        { status: result.httpStatus },
-      );
-    }
-    return NextResponse.json(result, { status: 201 });
+    return NextResponse.json({ transaction_id, item_id, due_date }, { status: 201 });
   } catch {
-    return NextResponse.json(
-      { error: "Borrow request failed" },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: "Borrow request failed" }, { status: 500 });
   }
 }

@@ -19,11 +19,11 @@ export async function PATCH(
     );
   }
 
-  const tx = db
-    .prepare(
-      "SELECT id, item_id, borrower_id, status FROM lending_transactions WHERE id = ?",
-    )
-    .get(txId) as
+  const { rows } = await db.execute({
+    sql: "SELECT id, item_id, borrower_id, status FROM lending_transactions WHERE id = ?",
+    args: [txId],
+  });
+  const tx = rows[0] as unknown as
     | { id: number; item_id: number; borrower_id: number; status: string }
     | undefined;
 
@@ -33,7 +33,7 @@ export async function PATCH(
       { status: 404 },
     );
   }
-  if (tx.borrower_id !== session.id) {
+  if (Number(tx.borrower_id) !== session.id) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
   if (tx.status !== "active") {
@@ -43,14 +43,16 @@ export async function PATCH(
     );
   }
 
-  db.transaction(() => {
-    db.prepare(
-      "UPDATE lending_transactions SET status = 'cancelled' WHERE id = ?",
-    ).run(txId);
-    db.prepare("UPDATE items SET status = 'available' WHERE id = ?").run(
-      tx.item_id,
-    );
-  })();
+  await db.batch([
+    {
+      sql: "UPDATE lending_transactions SET status = 'cancelled' WHERE id = ?",
+      args: [txId],
+    },
+    {
+      sql: "UPDATE items SET status = 'available' WHERE id = ?",
+      args: [Number(tx.item_id)],
+    },
+  ], "write");
 
   return NextResponse.json({ ok: true });
 }

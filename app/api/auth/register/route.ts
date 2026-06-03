@@ -21,11 +21,12 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const existing = db
-    .prepare("SELECT id FROM users WHERE email = ?")
-    .get(email.toLowerCase().trim());
+  const { rows: existing } = await db.execute({
+    sql: "SELECT id FROM users WHERE email = ?",
+    args: [email.toLowerCase().trim()],
+  });
 
-  if (existing) {
+  if (existing.length > 0) {
     return NextResponse.json(
       { error: "An account with that email already exists" },
       { status: 409 },
@@ -34,16 +35,15 @@ export async function POST(req: NextRequest) {
 
   const password_hash = bcrypt.hashSync(password, 10);
 
-  const result = db
-    .prepare(
-      "INSERT INTO users (full_name, email, password_hash, apartment_number) VALUES (?, ?, ?, ?)",
-    )
-    .run(
+  const result = await db.execute({
+    sql: "INSERT INTO users (full_name, email, password_hash, apartment_number) VALUES (?, ?, ?, ?)",
+    args: [
       full_name.trim(),
       email.toLowerCase().trim(),
       password_hash,
       apartment_number.trim(),
-    );
+    ],
+  });
 
   const session: SessionUser = {
     id: Number(result.lastInsertRowid),

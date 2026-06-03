@@ -10,19 +10,17 @@ export async function GET() {
   }
 
   try {
-    const items = db
-      .prepare(
-        `SELECT
-          i.id, i.owner_id, i.name, i.description, i.image_url, i.status, i.created_at,
-          TRIM(SUBSTR(u.full_name, 1, INSTR(u.full_name, ' ') - 1)) AS owner_first_name,
-          u.apartment_number AS owner_apartment
-        FROM items i
-        JOIN users u ON u.id = i.owner_id
-        ORDER BY i.created_at DESC`,
-      )
-      .all() as Item[];
+    const { rows } = await db.execute(
+      `SELECT
+        i.id, i.owner_id, i.name, i.description, i.image_url, i.status, i.created_at,
+        TRIM(SUBSTR(u.full_name, 1, INSTR(u.full_name, ' ') - 1)) AS owner_first_name,
+        u.apartment_number AS owner_apartment
+      FROM items i
+      JOIN users u ON u.id = i.owner_id
+      ORDER BY i.created_at DESC`,
+    );
 
-    return NextResponse.json(items);
+    return NextResponse.json(rows as unknown as Item[]);
   } catch {
     return NextResponse.json(
       { error: "Failed to load items" },
@@ -47,28 +45,26 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const result = db
-    .prepare(
-      "INSERT INTO items (owner_id, name, description, image_url, status) VALUES (?, ?, ?, ?, 'available')",
-    )
-    .run(
+  const result = await db.execute({
+    sql: "INSERT INTO items (owner_id, name, description, image_url, status) VALUES (?, ?, ?, ?, 'available')",
+    args: [
       session.id,
       name.trim(),
       description?.trim() ?? null,
       image_url ?? null,
-    );
+    ],
+  });
 
-  const item = db
-    .prepare(
-      `SELECT
-        i.id, i.owner_id, i.name, i.description, i.image_url, i.status, i.created_at,
-        TRIM(SUBSTR(u.full_name, 1, INSTR(u.full_name, ' ') - 1)) AS owner_first_name,
-        u.apartment_number AS owner_apartment
-      FROM items i
-      JOIN users u ON u.id = i.owner_id
-      WHERE i.id = ?`,
-    )
-    .get(result.lastInsertRowid) as Item;
+  const { rows } = await db.execute({
+    sql: `SELECT
+      i.id, i.owner_id, i.name, i.description, i.image_url, i.status, i.created_at,
+      TRIM(SUBSTR(u.full_name, 1, INSTR(u.full_name, ' ') - 1)) AS owner_first_name,
+      u.apartment_number AS owner_apartment
+    FROM items i
+    JOIN users u ON u.id = i.owner_id
+    WHERE i.id = ?`,
+    args: [result.lastInsertRowid],
+  });
 
-  return NextResponse.json(item, { status: 201 });
+  return NextResponse.json(rows[0] as unknown as Item, { status: 201 });
 }

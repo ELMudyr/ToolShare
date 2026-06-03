@@ -33,10 +33,11 @@ export async function PATCH(req: NextRequest) {
 
   // Check email uniqueness if changing
   if (email && email !== session.email) {
-    const existing = db
-      .prepare("SELECT id FROM users WHERE email = ? AND id != ?")
-      .get(email, session.id);
-    if (existing) {
+    const { rows: existing } = await db.execute({
+      sql: "SELECT id FROM users WHERE email = ? AND id != ?",
+      args: [email, session.id],
+    });
+    if (existing.length > 0) {
       return NextResponse.json({ error: "Email already in use" }, { status: 409 });
     }
   }
@@ -66,18 +67,23 @@ export async function PATCH(req: NextRequest) {
   }
 
   values.push(session.id);
-  db.prepare(`UPDATE users SET ${updates.join(", ")} WHERE id = ?`).run(...values);
+  await db.execute({
+    sql: `UPDATE users SET ${updates.join(", ")} WHERE id = ?`,
+    args: values as import("@libsql/client").InValue[],
+  });
 
-  const updated = db
-    .prepare("SELECT id, full_name, email, apartment_number, avatar_url FROM users WHERE id = ?")
-    .get(session.id) as UserRow;
+  const { rows: updatedRows } = await db.execute({
+    sql: "SELECT id, full_name, email, apartment_number, avatar_url FROM users WHERE id = ?",
+    args: [session.id],
+  });
+  const updated = updatedRows[0] as unknown as UserRow;
 
   const newSession: SessionUser = {
-    id: updated.id,
-    full_name: updated.full_name,
-    email: updated.email,
-    apartment_number: updated.apartment_number,
-    avatar_url: updated.avatar_url,
+    id: Number(updated.id),
+    full_name: String(updated.full_name),
+    email: String(updated.email),
+    apartment_number: String(updated.apartment_number),
+    avatar_url: updated.avatar_url as string | null ?? null,
   };
 
   const encoded = Buffer.from(JSON.stringify(newSession)).toString("base64");

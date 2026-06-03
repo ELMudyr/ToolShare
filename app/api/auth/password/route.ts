@@ -25,11 +25,13 @@ export async function PATCH(req: NextRequest) {
     );
   }
 
-  const user = db
-    .prepare("SELECT password_hash FROM users WHERE id = ?")
-    .get(session.id) as { password_hash: string } | undefined;
+  const { rows } = await db.execute({
+    sql: "SELECT password_hash FROM users WHERE id = ?",
+    args: [session.id],
+  });
+  const user = rows[0] as unknown as { password_hash: string } | undefined;
 
-  if (!user || !bcrypt.compareSync(current_password, user.password_hash)) {
+  if (!user || !bcrypt.compareSync(current_password, String(user.password_hash))) {
     return NextResponse.json(
       { error: "Current password is incorrect" },
       { status: 401 },
@@ -37,7 +39,10 @@ export async function PATCH(req: NextRequest) {
   }
 
   const hash = bcrypt.hashSync(new_password, 10);
-  db.prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(hash, session.id);
+  await db.execute({
+    sql: "UPDATE users SET password_hash = ? WHERE id = ?",
+    args: [hash, session.id],
+  });
 
   return NextResponse.json({ ok: true });
 }
